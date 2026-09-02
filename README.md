@@ -18,9 +18,9 @@ Here is the computational graph of a single **Transformer Decoder Block** in LLa
 
 ```mermaid
 graph TD
-    Input[Input Tensor: x <br>Shape: B, Seq_Len, Dim] --> RMSNorm1[RMSNorm]
+    Input["Input Tensor: x <br>Shape: B, Seq_Len, Dim"] --> RMSNorm1[RMSNorm]
     
-    subgraph Self-Attention Block
+    subgraph self_attn ["Self-Attention Block"]
         RMSNorm1 --> WQ[WQ Projection]
         RMSNorm1 --> WK[WK Projection]
         RMSNorm1 --> WV[WV Projection]
@@ -28,37 +28,39 @@ graph TD
         WQ --> RoPE_Q[Apply Rotary Embeddings]
         WK --> RoPE_K[Apply Rotary Embeddings]
         
-        RoPE_K --> K_Cache[Store/Retrieve KV Cache]
-        WV --> V_Cache[Store/Retrieve KV Cache]
+        RoPE_K --> K_Cache["Store/Retrieve KV Cache"]
+        WV --> V_Cache["Store/Retrieve KV Cache"]
         
-        K_Cache --> Repeat_KV[Repeat KV Heads if GQA]
+        K_Cache --> Repeat_KV["Repeat KV Heads if GQA"]
         V_Cache --> Repeat_KV
         
-        RoPE_Q & Repeat_KV --> MatMul_Softmax[Scaled Dot-Product & Softmax]
+        RoPE_Q --> MatMul_Softmax["Scaled Dot-Product & Softmax"]
+        Repeat_KV --> MatMul_Softmax
         MatMul_Softmax --> WO[WO Output Projection]
     end
     
-    Input --> Add1[+]
+    Input --> Add1["+"]
     WO --> Add1
     
     Add1 --> RMSNorm2[RMSNorm]
     
-    subgraph SwiGLU Feed-Forward Network
+    subgraph ffn ["SwiGLU Feed-Forward Network"]
         RMSNorm2 --> W1[W1 Projection]
         RMSNorm2 --> W3[W3 Projection]
         
-        W1 --> SiLU[SiLU / Swish Gate]
-        SiLU & W3 --> GateMul[*]
+        W1 --> SiLU["SiLU / Swish Gate"]
+        SiLU --> GateMul["*"]
+        W3 --> GateMul
         GateMul --> W2[W2 Output Projection]
     end
     
-    Add1 --> Add2[+]
+    Add1 --> Add2["+"]
     W2 --> Add2
     
-    Add2 --> Output[Output Tensor: out <br>Shape: B, Seq_Len, Dim]
+    Add2 --> Output["Output Tensor: out <br>Shape: B, Seq_Len, Dim"]
     
-    style Self-Attention Block fill:#f3f6fa,stroke:#1a5fb4,stroke-width:1px
-    style SwiGLU Feed-Forward Network fill:#f9f0ff,stroke:#613583,stroke-width:1px
+    style self_attn fill:#f3f6fa,stroke:#1a5fb4,stroke-width:1px
+    style ffn fill:#f9f0ff,stroke:#613583,stroke-width:1px
     style Add1 fill:#d5fadc,stroke:#26a269,stroke-width:1px
     style Add2 fill:#d5fadc,stroke:#26a269,stroke-width:1px
 ```
@@ -72,17 +74,18 @@ Instead of adding positional vectors to embeddings, RoPE applies a coordinate ro
 
 ```mermaid
 graph TD
-    InputX[Input Tensor: Q / K <br>Shape: B, Seq_Len, H, Head_Dim] --> SplitReal[Re-shape & View as Complex <br>x_complex Shape: B, Seq_Len, H, Head_Dim/2]
+    InputX["Input Tensor: Q / K <br>Shape: B, Seq_Len, H, Head_Dim"] --> SplitReal["Re-shape & View as Complex <br>x_complex Shape: B, Seq_Len, H, Head_Dim/2"]
     
-    m[Token Position: m] & ThetaFreq[Theta Frequencies] --> OuterProd[Outer Product: m * theta]
-    OuterProd --> PolarForm[Polar Representation <br>freqs_complex Shape: Seq_Len, Head_Dim/2]
-    PolarForm --> Expand[Expand Dimensions <br>Shape: 1, Seq_Len, 1, Head_Dim/2]
+    m["Token Position: m"] --> OuterProd["Outer Product: m * theta"]
+    ThetaFreq["Theta Frequencies"] --> OuterProd
+    OuterProd --> PolarForm["Polar Representation <br>freqs_complex Shape: Seq_Len, Head_Dim/2"]
+    PolarForm --> Expand["Expand Dimensions <br>Shape: 1, Seq_Len, 1, Head_Dim/2"]
     
-    SplitReal --> ComplexMul[*]
+    SplitReal --> ComplexMul["*"]
     Expand --> ComplexMul
     
-    ComplexMul --> ViewReal[View as Real Numbers <br>Shape: B, Seq_Len, H, Head_Dim/2, 2]
-    ViewReal --> Output[Reshape to Original Shape <br>Shape: B, Seq_Len, H, Head_Dim]
+    ComplexMul --> ViewReal["View as Real Numbers <br>Shape: B, Seq_Len, H, Head_Dim/2, 2"]
+    ViewReal --> Output["Reshape to Original Shape <br>Shape: B, Seq_Len, H, Head_Dim"]
     
     style PolarForm fill:#fff3cd,stroke:#ffc107,stroke-width:1px
     style ComplexMul fill:#cfe2ff,stroke:#0d6efd,stroke-width:1px
@@ -95,20 +98,20 @@ This is executed using the `repeat_kv` operation:
 
 ```mermaid
 graph LR
-    subgraph Query Heads (H_Q = 8)
-        q1[Q-Head 1]
-        q2[Q-Head 2]
-        q3[Q-Head 3]
-        q4[Q-Head 4]
-        q5[Q-Head 5]
-        q6[Q-Head 6]
-        q7[Q-Head 7]
-        q8[Q-Head 8]
+    subgraph query_heads ["Query Heads (H_Q = 8)"]
+        q1["Q-Head 1"]
+        q2["Q-Head 2"]
+        q3["Q-Head 3"]
+        q4["Q-Head 4"]
+        q5["Q-Head 5"]
+        q6["Q-Head 6"]
+        q7["Q-Head 7"]
+        q8["Q-Head 8"]
     end
 
-    subgraph KV Heads (H_KV = 2)
-        kv1[KV-Head 1]
-        kv2[KV-Head 2]
+    subgraph kv_heads ["KV Heads (H_KV = 2)"]
+        kv1["KV-Head 1"]
+        kv2["KV-Head 2"]
     end
 
     q1 -->|Repeat Group 1| kv1
